@@ -1,8 +1,13 @@
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
-import java.time.LocalDate;
-import java.util.Calendar;
-import java.util.Date;
+import java.util.*;
 
 public class DateUtil {
     /**
@@ -60,7 +65,41 @@ public class DateUtil {
     }
 
     // 演習8(リストから過去一か月の日付リストを取得)
+    public static List<String> getLastMonthDates(String inputDate) throws ParseException {
+        ArrayList<String> dates = new ArrayList<>();
+        dates.add(inputDate);
+        String[] dateParts = inputDate.split("/");
+        int year = Integer.parseInt(dateParts[0]);
+        //注意：例えば"2023/03/04"がinputDateであれば、2023/02/05までの日付のリストを返したいから、何日まであるのかを見る月は3-1=2で2月にする必要がある。
+        int month = Integer.parseInt(dateParts[1]) - 1;
+        int howManyDays = DateUtil.getHowManyDaysOf(year, month);
+        for(int i = -1; i > -1 * howManyDays - 1; i --) {
+            Date date = DateUtilAnswer.addDaysToDate(DateUtilAnswer.validateAndParseDate(inputDate),i);
+            SimpleDateFormat sdf = new SimpleDateFormat("yyyy/MM/dd");
+            String formattedDate = sdf.format(date);
+            dates.add(formattedDate);
+        }
+        return dates;
+    }
 
+    private static int getHowManyDaysOf(int year, int month) {
+        if(month == 1 || month == 3 || month == 5 || month == 7 || month == 8 || month == 10 || month == 12 || month == 0) {
+            return 31;
+        } else if(month == 4 || month == 6 || month == 9 || month == 11) {
+            return 30;
+        } else {
+            if(isLeapYear(year)) {
+                return 29;
+            } else {
+                return 28;
+            }
+        }
+    }
+
+    private static boolean isLeapYear(int year) {
+        if(year % 4 == 0) return true;
+        else return false;
+    }
 
     /**
      * 2日の間の日数を返す
@@ -122,12 +161,48 @@ public class DateUtil {
     }
 
     // 演習14(祝日の配列を取得)
+    public static String[] getNationalHoliday(int yyyy) throws Exception {
+        final String responseBody = getResponseBodyTo("https://holidays-jp.github.io/api/v1/" + yyyy + "/date.json");
+        final ObjectMapper objectMapper = new ObjectMapper();
+        final JsonNode jsonNode = objectMapper.readTree(responseBody);
+        return getKeyStringArr(jsonNode);
+    }
 
+    public static String getResponseBodyTo(String url) throws Exception {
+        final HttpClient client = HttpClient.newHttpClient();
+        final HttpRequest request = HttpRequest.newBuilder()
+                .uri(new URI(url))
+                .build();
+        final HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        return response.body();
+    }
+
+    private static String[] getKeyStringArr(JsonNode jsonNode) {
+        final int size = jsonNode.size();
+        final String[] arr = new String[size];
+        final Iterator<String> iterator = jsonNode.fieldNames();
+        for (int i = 0; iterator.hasNext(); i++) {
+            arr[i] = iterator.next().replace("-", "/");
+        }
+        return arr;
+    }
 
     // 演習15(与えられた日付が祝日か否か)
+    public static boolean isNationalHoliday(String yyyymmdd) throws Exception{
+        final int year = getYearOf(yyyymmdd);
+        final String[] nationalHolidays = getNationalHoliday(year);
+        final ArrayList<String> arrDates = new ArrayList<>(Arrays.asList(nationalHolidays));
+        return arrDates.contains(yyyymmdd);
+    }
 
+    private static int getYearOf(String yyyymmdd) {
+        return Integer.parseInt(yyyymmdd.substring(0, 4));
+    }
 
     // 演習16(与えられた日付が休日(土日または祝日)か否か)
+    public static boolean isHoliday(String yyyymmdd) throws Exception {
+        return isNationalHoliday(yyyymmdd) || isSaturdayOrSunday(yyyymmdd);
+    }
 
     /**
      * ある期間内の平日の数をカウントする
